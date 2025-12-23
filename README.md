@@ -44,7 +44,8 @@
 | `BOT_TOKEN` | Telegram Bot Token | `123456:ABC-xxx` |
 | `ADMIN_ID` | 管理员 Telegram ID | `123456789` |
 | `KV_ID` | KV Namespace ID | `xxxxxx` |
-| `BOT_USERNAME` | Bot 用户名 | `my_forward_bot` |
+| `BOT_USERNAME` |  Bot 用户名 | `my_forward_bot` |
+| `WORKER_URL`| Worker链接 |  `https://telegram-forward-bot.<你的子域名>.workers.dev/setup` |
 
 **可选（自定义配置）：**
 
