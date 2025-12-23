@@ -9,23 +9,19 @@
  */
 
 // ==================== 配置加载 ====================
-
 function loadConfig(env) {
   return {
-    // 基础配置
     botToken: env.BOT_TOKEN,
     adminIds: (env.ADMIN_ID || '').split(',').map(id => id.trim()).filter(Boolean),
     botUsername: env.BOT_USERNAME || '',
     
-    // 验证码配置
     captcha: {
       enabled: env.CAPTCHA_ENABLED !== 'false',
-      type: env.CAPTCHA_TYPE || 'button', // button, math, text, slider
+      type: env.CAPTCHA_TYPE || 'button',
       timeout: parseInt(env.CAPTCHA_TIMEOUT) || 300,
       maxAttempts: parseInt(env.MAX_CAPTCHA_ATTEMPTS) || 3,
     },
     
-    // 消息模板
     messages: {
       welcome: env.WELCOME_MESSAGE || '👋 欢迎！为防止滥用，请先完成验证。',
       verifySuccess: env.VERIFY_SUCCESS_MESSAGE || '✅ 验证成功！现在您可以发送消息了，我会将消息转发给管理员。',
@@ -35,34 +31,24 @@ function loadConfig(env) {
       rateLimited: env.RATE_LIMITED_MESSAGE || '⚠️ 发送过于频繁，请稍后再试。',
     },
     
-    // 功能开关
     features: {
       showUserInfo: env.SHOW_USER_INFO !== 'false',
       sendConfirm: env.SEND_CONFIRM !== 'false',
     },
     
-    // 速率限制
     rateLimit: {
       enabled: env.RATE_LIMIT_ENABLED !== 'false',
       perMinute: parseInt(env.RATE_LIMIT_PER_MINUTE) || 10,
     },
     
-    // 消息映射保留天数
     mappingDays: parseInt(env.MESSAGE_MAPPING_DAYS) || 30,
     
-    // 状态常量
-    STATUS: {
-      PENDING: 'pending_captcha',
-      VERIFIED: 'verified',
-      BANNED: 'banned'
-    }
+    STATUS: { PENDING: 'pending_captcha', VERIFIED: 'verified', BANNED: 'banned' }
   };
 }
 
-// ==================== 验证码生成器 ====================
-
+// ==================== 验证码组件 ====================
 const Captcha = {
-  // 按钮验证码 (推荐)
   button: () => {
     const emojis = ['🍎','🍊','🍋','🍇','🍓','🍑','🍒','🥝','🍌','🍉','🥭','🍍'];
     const shuffled = [...emojis].sort(() => Math.random() - 0.5).slice(0, 6);
@@ -79,8 +65,6 @@ const Captcha = {
       }
     };
   },
-  
-  // 数学验证码
   math: () => {
     const ops = [['+', (a,b) => a+b], ['-', (a,b) => a-b], ['×', (a,b) => a*b]];
     const [s, f] = ops[Math.floor(Math.random() * 3)];
@@ -88,16 +72,12 @@ const Captcha = {
     const b = Math.floor(Math.random() * (s === '×' ? 10 : 20)) + 1;
     return { type: 'math', question: `计算: ${a} ${s} ${b} = ?`, answer: f(a, b).toString() };
   },
-  
-  // 文本验证码
   text: () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
     return { type: 'text', question: `输入验证码: <code>${code}</code>`, answer: code };
   },
-  
-  // 滑块验证码 (模拟)
   slider: () => {
     const pos = Math.floor(Math.random() * 5);
     return {
@@ -114,8 +94,7 @@ const Captcha = {
   }
 };
 
-// ==================== API 辅助函数 ====================
-
+// ==================== API 基础函数 ====================
 const api = (cfg, method, data) => fetch(
   `https://api.telegram.org/bot${cfg.botToken}/${method}`,
   { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }
@@ -127,22 +106,13 @@ const answer = (c, id, text, alert = false) => api(c, 'answerCallbackQuery', { c
 const forward = (c, to, from, mid) => api(c, 'forwardMessage', { chat_id: to, from_chat_id: from, message_id: mid });
 const copy = (c, to, from, mid) => api(c, 'copyMessage', { chat_id: to, from_chat_id: from, message_id: mid });
 
-// ==================== 数据存储类 ====================
-
+// ==================== 存储类 ====================
 class Store {
   constructor(kv) { this.kv = kv; }
-  
-  // 用户数据
   getUser(id) { return this.kv.get(`u:${id}`, 'json'); }
   saveUser(id, d) { return this.kv.put(`u:${id}`, JSON.stringify(d)); }
-  
-  // 消息映射 (用于管理员回复)
-  saveMap(amid, ucid, umid, days) {
-    return this.kv.put(`m:${amid}`, JSON.stringify({ ucid, umid }), { expirationTtl: 86400 * days });
-  }
+  saveMap(amid, ucid, umid, days) { return this.kv.put(`m:${amid}`, JSON.stringify({ ucid, umid }), { expirationTtl: 86400 * days }); }
   getMap(amid) { return this.kv.get(`m:${amid}`, 'json'); }
-  
-  // 速率限制
   async checkRate(id, limit) {
     const k = `r:${id}`, now = Date.now();
     const d = await this.kv.get(k, 'json') || { c: 0, t: 0 };
@@ -155,7 +125,6 @@ class Store {
 }
 
 // ==================== Bot 逻辑核心 ====================
-
 class Bot {
   constructor(env) {
     this.cfg = loadConfig(env);
@@ -163,169 +132,104 @@ class Bot {
   }
   
   isAdmin(id) { return this.cfg.adminIds.includes(id.toString()); }
-  
   genCaptcha() { return (Captcha[this.cfg.captcha.type] || Captcha.button)(); }
   
-  // 发送验证码
   async sendCaptcha(cid, user) {
     const cap = this.genCaptcha();
     user.status = this.cfg.STATUS.PENDING;
     user.cap = { ans: cap.answer, type: cap.type, at: Date.now(), try: 0 };
     await this.store.saveUser(cid, user);
-    
     const t = Math.floor(this.cfg.captcha.timeout / 60);
-    await send(this.cfg, cid, 
-      `🔐 <b>验证</b>\n\n${this.cfg.messages.welcome}\n\n${cap.question}\n\n⏰ ${t}分钟 | ❌ ${this.cfg.captcha.maxAttempts}次`,
-      { reply_markup: cap.keyboard }
-    );
+    await send(this.cfg, cid, `🔐 <b>验证</b>\n\n${this.cfg.messages.welcome}\n\n${cap.question}\n\n⏰ ${t}分钟 | ❌ ${this.cfg.captcha.maxAttempts}次`, { reply_markup: cap.keyboard });
   }
   
-  // 验证逻辑
   async verify(cid, ans, user) {
     const cap = user.cap;
-    
-    // 过期检查
     if (Date.now() - cap.at > this.cfg.captcha.timeout * 1000) {
-      user.cap = null;
-      await this.store.saveUser(cid, user);
+      user.cap = null; await this.store.saveUser(cid, user);
       await send(this.cfg, cid, this.cfg.messages.captchaExpired);
       return { ok: false, expired: true };
     }
-    
-    // 答案检查
     if (ans.toString().toUpperCase() === cap.ans.toString().toUpperCase()) {
-      user.status = this.cfg.STATUS.VERIFIED;
-      user.cap = null;
-      user.verifiedAt = Date.now();
+      user.status = this.cfg.STATUS.VERIFIED; user.cap = null; user.verifiedAt = Date.now();
       await this.store.saveUser(cid, user);
       await send(this.cfg, cid, this.cfg.messages.verifySuccess);
       return { ok: true };
     }
-    
-    // 错误计数
     cap.try++;
     if (cap.try >= this.cfg.captcha.maxAttempts) {
-      user.status = this.cfg.STATUS.BANNED;
-      user.cap = null;
-      user.bannedAt = Date.now();
+      user.status = this.cfg.STATUS.BANNED; user.cap = null; user.bannedAt = Date.now();
       await this.store.saveUser(cid, user);
       await send(this.cfg, cid, '❌ 验证失败次数过多，已封禁');
       return { ok: false, banned: true };
     }
-    
     await this.store.saveUser(cid, user);
     return { ok: false, left: this.cfg.captcha.maxAttempts - cap.try };
   }
   
-  // 按钮回调处理
   async onCallback(cb) {
     const cid = cb.from.id, data = cb.data, mid = cb.message?.message_id;
-    
-    // 验证码回调
     if (data.startsWith('cap_')) {
       const user = await this.store.getUser(cid);
-      if (!user || user.status !== this.cfg.STATUS.PENDING)
-        return answer(this.cfg, cb.id, '已过期', true);
-      
+      if (!user || user.status !== this.cfg.STATUS.PENDING) return answer(this.cfg, cb.id, '已过期', true);
       const res = await this.verify(cid, data.slice(4), user);
-      if (res.ok) {
-        await edit(this.cfg, cid, mid, this.cfg.messages.verifySuccess);
-        return answer(this.cfg, cb.id, '✅ 成功');
-      }
+      if (res.ok) { await edit(this.cfg, cid, mid, this.cfg.messages.verifySuccess); return answer(this.cfg, cb.id, '✅ 成功'); }
       if (res.banned) await edit(this.cfg, cid, mid, '❌ 已封禁');
       else if (res.left) return answer(this.cfg, cb.id, `❌ 剩余${res.left}次`, true);
       return;
     }
-    
-    // 管理员快捷按钮
     if (data.startsWith('a_') && this.isAdmin(cid)) {
       const [, act, tid] = data.split('_');
       const t = await this.store.getUser(tid) || { cid: tid };
-      
-      if (act === 'b') { // Ban
-        t.status = this.cfg.STATUS.BANNED;
-        t.bannedAt = Date.now();
-        await this.store.saveUser(tid, t);
-        await send(this.cfg, tid, this.cfg.messages.banned);
-        return answer(this.cfg, cb.id, '✅ 已封禁', true);
+      if (act === 'b') {
+        t.status = this.cfg.STATUS.BANNED; t.bannedAt = Date.now(); await this.store.saveUser(tid, t);
+        await send(this.cfg, tid, this.cfg.messages.banned); return answer(this.cfg, cb.id, '✅ 已封禁', true);
       }
-      if (act === 'u') { // Unban
-        t.status = this.cfg.STATUS.VERIFIED;
-        await this.store.saveUser(tid, t);
-        await send(this.cfg, tid, '✅ 已解封');
-        return answer(this.cfg, cb.id, '✅ 已解封', true);
+      if (act === 'u') {
+        t.status = this.cfg.STATUS.VERIFIED; await this.store.saveUser(tid, t);
+        await send(this.cfg, tid, '✅ 已解封'); return answer(this.cfg, cb.id, '✅ 已解封', true);
       }
     }
   }
   
-  // 用户消息处理
   async onUserMsg(msg) {
     const cid = msg.chat.id;
     let user = await this.store.getUser(cid);
-    
-    // 初始化用户
     if (!user) {
-      user = {
-        cid, odId: msg.from.id, un: msg.from.username,
-        fn: msg.from.first_name, ln: msg.from.last_name, at: Date.now()
-      };
+      user = { cid, odId: msg.from.id, un: msg.from.username, fn: msg.from.first_name, ln: msg.from.last_name, at: Date.now() };
       if (this.cfg.captcha.enabled) return this.sendCaptcha(cid, user);
       user.status = this.cfg.STATUS.VERIFIED;
     }
+    user.un = msg.from.username; user.fn = msg.from.first_name; user.lastAt = Date.now();
     
-    user.un = msg.from.username;
-    user.fn = msg.from.first_name;
-    user.lastAt = Date.now();
-    
-    // 状态机
     switch (user.status) {
-      case this.cfg.STATUS.BANNED:
-        return send(this.cfg, cid, this.cfg.messages.banned);
-        
+      case this.cfg.STATUS.BANNED: return send(this.cfg, cid, this.cfg.messages.banned);
       case this.cfg.STATUS.PENDING:
-        if (msg.text && !['button', 'slider'].includes(user.cap?.type))
-          return this.verify(cid, msg.text, user);
+        if (msg.text && !['button', 'slider'].includes(user.cap?.type)) return this.verify(cid, msg.text, user);
         return send(this.cfg, cid, '请先完成验证');
-        
       case this.cfg.STATUS.VERIFIED:
-        if (this.cfg.rateLimit.enabled && !await this.store.checkRate(cid, this.cfg.rateLimit.perMinute))
-          return send(this.cfg, cid, this.cfg.messages.rateLimited);
+        if (this.cfg.rateLimit.enabled && !await this.store.checkRate(cid, this.cfg.rateLimit.perMinute)) return send(this.cfg, cid, this.cfg.messages.rateLimited);
         await this.forwardToAdmin(msg, user);
         break;
-        
-      default:
-        if (this.cfg.captcha.enabled) return this.sendCaptcha(cid, user);
+      default: if (this.cfg.captcha.enabled) return this.sendCaptcha(cid, user);
     }
-    
     await this.store.saveUser(cid, user);
   }
   
-  // 转发给管理员
   async forwardToAdmin(msg, user) {
     const cid = msg.chat.id;
-    
     for (const aid of this.cfg.adminIds) {
-      // 1. 发送用户信息 (带快捷按钮)
       if (this.cfg.features.showUserInfo) {
         const info = `👤 <b>新消息</b>\nID: <code>${cid}</code>\n用户: ${user.un ? '@'+user.un : '无'}\n姓名: ${user.fn || ''} ${user.ln || ''}`;
-        const kb = { inline_keyboard: [[
-          { text: '🚫 封禁', callback_data: `a_b_${cid}` },
-          { text: '✅ 解封', callback_data: `a_u_${cid}` }
-        ]]};
+        const kb = { inline_keyboard: [[{ text: '🚫 封禁', callback_data: `a_b_${cid}` }, { text: '✅ 解封', callback_data: `a_u_${cid}` }]]};
         await send(this.cfg, aid, info, { reply_markup: kb });
       }
-      
-      // 2. 转发原消息
       const res = await forward(this.cfg, aid, cid, msg.message_id);
-      
-      // 3. 记录映射关系 (用于回复)
       if (res.ok) await this.store.saveMap(res.result.message_id, cid, msg.message_id, this.cfg.mappingDays);
     }
-    
     if (this.cfg.features.sendConfirm) await send(this.cfg, cid, this.cfg.messages.messageSent);
   }
-  
-  // 辅助：获取目标用户ID (支持回复消息或参数)
+
   async getTargetId(msg, arg) {
     if (msg.reply_to_message) {
       const map = await this.store.getMap(msg.reply_to_message.message_id);
@@ -336,92 +240,39 @@ class Bot {
     return arg || null;
   }
 
-  // 管理员消息处理
   async onAdminMsg(msg) {
     const cid = msg.chat.id, text = msg.text || '';
-    
-    // 指令处理
     if (text.startsWith('/')) {
       const [cmd, arg] = text.split(' ');
-
-      // 帮助指令
       if (['/start', '/help', '/menu'].includes(cmd)) {
-        return send(this.cfg, cid, `
-🤖 <b>管理员面板</b>
-
-<b>1. 快捷回复 (推荐)</b>
-回复用户转发来的消息并发送：
-• <code>/block</code>   - 🚫 封禁用户
-• <code>/unblock</code> - ✅ 解封用户
-• <code>/check</code>   - 🔍 查看资料
-• <b>直接文字</b>  - ✉️ 回复消息
-
-<b>2. 指定ID操作</b>
-• <code>/block [ID]</code>
-• <code>/unblock [ID]</code>
-• <code>/check [ID]</code>
-
-<b>3. 系统</b>
-• <code>/config</code> - 查看配置
-        `.trim());
+        return send(this.cfg, cid, `🤖 <b>管理面板</b>\n\n<b>1. 回复转发消息:</b>\n/block - 🚫 封禁\n/unblock - ✅ 解封\n/check - 🔍 查询\n文字 - ✉️ 回复\n\n<b>2. 指定ID:</b>\n/block [ID]\n/config - 配置`);
       }
-
-      // 封禁
       if (cmd === '/block' || cmd === '/ban') {
         const tid = await this.getTargetId(msg, arg);
         if (!tid) return send(this.cfg, cid, '⚠️ 请回复消息或输入ID');
-        
-        const t = await this.store.getUser(tid) || { cid: tid };
-        t.status = this.cfg.STATUS.BANNED;
-        t.bannedAt = Date.now();
-        await this.store.saveUser(tid, t);
-        
-        await send(this.cfg, tid, this.cfg.messages.banned);
-        return send(this.cfg, cid, `🚫 用户 <code>${tid}</code> 已封禁`);
+        const t = await this.store.getUser(tid) || { cid: tid }; t.status = this.cfg.STATUS.BANNED; t.bannedAt = Date.now(); await this.store.saveUser(tid, t);
+        await send(this.cfg, tid, this.cfg.messages.banned); return send(this.cfg, cid, `🚫 用户 <code>${tid}</code> 已封禁`);
       }
-
-      // 解封
       if (cmd === '/unblock' || cmd === '/unban') {
         const tid = await this.getTargetId(msg, arg);
         if (!tid) return send(this.cfg, cid, '⚠️ 请回复消息或输入ID');
-        
-        const t = await this.store.getUser(tid) || { cid: tid };
-        t.status = this.cfg.STATUS.VERIFIED;
-        await this.store.saveUser(tid, t);
-        
-        await send(this.cfg, tid, '✅ 您已被解封');
-        return send(this.cfg, cid, `✅ 用户 <code>${tid}</code> 已解封`);
+        const t = await this.store.getUser(tid) || { cid: tid }; t.status = this.cfg.STATUS.VERIFIED; await this.store.saveUser(tid, t);
+        await send(this.cfg, tid, '✅ 您已被解封'); return send(this.cfg, cid, `✅ 用户 <code>${tid}</code> 已解封`);
       }
-
-      // 查询
       if (cmd === '/check' || cmd === '/checkblock') {
         const tid = await this.getTargetId(msg, arg);
         if (!tid) return send(this.cfg, cid, '⚠️ 请回复消息或输入ID');
-        
         const t = await this.store.getUser(tid);
         if (!t) return send(this.cfg, cid, '❓ 无记录');
-        
         const st = { [this.cfg.STATUS.VERIFIED]:'✅ 正常', [this.cfg.STATUS.BANNED]:'🚫 封禁', [this.cfg.STATUS.PENDING]:'⏳ 待验' };
-        const info = `🔍 <b>资料</b>\nID: <code>${tid}</code>\n状态: ${st[t.status]||'未知'}\n用户: ${t.un?'@'+t.un:'无'}\n时间: ${new Date(t.lastAt||t.at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}`;
-        return send(this.cfg, cid, info);
+        return send(this.cfg, cid, `🔍 <b>资料</b>\nID: <code>${tid}</code>\n状态: ${st[t.status]||'未知'}\n用户: ${t.un?'@'+t.un:'无'}\n时间: ${new Date(t.lastAt||t.at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}`);
       }
-      
-      // 配置
-      if (cmd === '/config') {
-        return send(this.cfg, cid, `⚙️ 配置\n验证码: ${this.cfg.captcha.enabled?'✅':'❌'}\n超时: ${this.cfg.captcha.timeout}s\n限速: ${this.cfg.rateLimit.enabled?this.cfg.rateLimit.perMinute:'∞'}/min`);
-      }
+      if (cmd === '/config') return send(this.cfg, cid, `⚙️ 配置\n验证码: ${this.cfg.captcha.enabled?'✅':'❌'}\n超时: ${this.cfg.captcha.timeout}s`);
     }
-    
-    // 回复消息
     if (msg.reply_to_message) {
       const map = await this.store.getMap(msg.reply_to_message.message_id);
-      if (map) {
-        const r = await copy(this.cfg, map.ucid, cid, msg.message_id);
-        await send(this.cfg, cid, r.ok ? '✅ 已回复' : '❌ 失败');
-      } else if (msg.reply_to_message.from.id !== msg.from.id) {
-        // 忽略回复Bot自己的提示信息
-        await send(this.cfg, cid, '⚠️ 消息已过期');
-      }
+      if (map) { const r = await copy(this.cfg, map.ucid, cid, msg.message_id); await send(this.cfg, cid, r.ok ? '✅ 已回复' : '❌ 失败'); } 
+      else if (msg.reply_to_message.from.id !== msg.from.id) await send(this.cfg, cid, '⚠️ 消息已过期');
     }
   }
   
@@ -435,30 +286,35 @@ class Bot {
   }
 }
 
-// ==================== Worker 入口 ====================
-
+// ==================== Worker 安全入口 ====================
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const cfg = loadConfig(env);
     
-    // Webhook 接收
+    // 1. Webhook 核心接收 (只接受 POST)
     if (url.pathname === '/webhook' && request.method === 'POST') {
-      await new Bot(env).handle(await request.json());
-      return new Response('OK');
+      try {
+        const update = await request.json();
+        const ctx = { waitUntil: (p) => p }; 
+        await new Bot(env).handle(update);
+        return new Response('OK', { status: 200 });
+      } catch (e) {
+        return new Response('Error', { status: 500 });
+      }
     }
-    
-    // 初始化 (设置 Webhook + 菜单)
+
+    // 2. 初始化设置 (仅此一个管理接口)
     if (url.pathname === '/setup') {
-      const webhookUrl = `https://${url.hostname}/webhook`;
+       const webhookUrl = `https://${url.hostname}/webhook`;
       
-      // 1. 设置 Webhook
+      // 设置 Webhook
       const r1 = await api(cfg, 'setWebhook', {
         url: webhookUrl,
         allowed_updates: ['message', 'edited_message', 'callback_query']
       });
 
-      // 2. 设置管理员指令菜单
+      // 设置管理员指令菜单
       const r2 = await api(cfg, 'setMyCommands', {
         commands: [
           { command: 'help', description: '📜 打开控制面板' },
@@ -469,23 +325,12 @@ export default {
         ]
       });
 
-      return Response.json({ webhook: r1, commands: r2 });
+      return new Response(JSON.stringify({ webhook: r1, commands: r2 }, null, 2), {
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
-    
-    if (url.pathname === '/info') return Response.json(await api(cfg, 'getWebhookInfo', {}));
-    if (url.pathname === '/delete') return Response.json(await api(cfg, 'deleteWebhook', {}));
-    
-    // 首页
-    return new Response(`
-<!DOCTYPE html><html><head><meta charset="utf-8"><title>TG Bot</title>
-<style>body{font-family:system-ui;max-width:500px;margin:50px auto;padding:20px}
-h1{color:#0088cc}.box{background:#f0f4f8;padding:15px;border-radius:8px;margin:20px 0}
-a{display:block;padding:12px;margin:10px 0;background:#0088cc;color:white;text-decoration:none;border-radius:6px;text-align:center}
-a:hover{background:#006699} .warn{background:#ffEBEE;color:#D32F2F}</style></head>
-<body><h1>🤖 Telegram Forward Bot</h1><div class="box">✅ 正在运行</div>
-<a href="/setup">🛠️ 初始化 (设置Webhook+菜单)</a>
-<a href="/info" style="background:#546E7A">ℹ️ 查看状态</a>
-<a href="/delete" class="warn" style="background:#D32F2F">🗑️ 删除 Webhook</a>
-</body></html>`, { headers: { 'Content-Type': 'text/html;charset=utf-8' } });
+
+    // 3. 所有其他路径 -> 404 (无网页 UI)
+    return new Response('Not Found', { status: 404 });
   }
 };
