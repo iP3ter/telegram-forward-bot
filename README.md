@@ -45,7 +45,7 @@
 | `ADMIN_ID` | 管理员 Telegram ID | `123456789` |
 | `KV_ID` | KV Namespace ID | `xxxxxx` |
 | `BOT_USERNAME` |  Bot 用户名 | `my_forward_bot` |
-| `WORKER_URL`| Worker链接 |  `https://telegram-forward-bot.<你的子域名>.workers.dev/setup` |
+| `WORKER_URL`| Worker链接 |  `https://自定义名字.你的子域名.workers.dev` |
 
 **可选（自定义配置）：**
 
@@ -60,7 +60,7 @@
 
 ### 7️⃣ 设置 Webhook
 
-部署完成后访问：https://telegram-forward-bot.<你的子域名>.workers.dev/setup
+部署完成后访问：https://自定义名字.你的子域名.workers.dev/setup
 
 
 ## 📱 使用
