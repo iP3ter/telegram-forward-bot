@@ -1,0 +1,64 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wrangler
+        run: npm install wrangler -g
+
+      # ============ 动态替换 wrangler.toml 中的配置 ============
+      - name: Update wrangler.toml
+        run: |
+          sed -i 's/ADMIN_ID_PLACEHOLDER/${{ secrets.ADMIN_ID }}/g' wrangler.toml
+          sed -i 's/KV_ID_PLACEHOLDER/${{ secrets.KV_ID }}/g' wrangler.toml
+          sed -i 's/BOT_USERNAME_PLACEHOLDER/${{ secrets.BOT_USERNAME }}/g' wrangler.toml
+          
+          # 如果有其他可选配置
+          if [ -n "${{ secrets.CAPTCHA_TYPE }}" ]; then
+            sed -i 's/CAPTCHA_TYPE = "button"/CAPTCHA_TYPE = "${{ secrets.CAPTCHA_TYPE }}"/g' wrangler.toml
+          fi
+          
+          # 显示替换后的配置（隐藏敏感信息）
+          echo "=== wrangler.toml (sanitized) ==="
+          cat wrangler.toml | sed 's/id = ".*"/id = "***"/g'
+        env:
+          ADMIN_ID: ${{ secrets.ADMIN_ID }}
+          KV_ID: ${{ secrets.KV_ID }}
+
+      # ============ 部署 Worker ============
+      - name: Deploy to Cloudflare Workers
+        run: wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      # ============ 设置 Secrets ============
+      - name: Set Bot Token Secret
+        run: echo "${{ secrets.BOT_TOKEN }}" | wrangler secret put BOT_TOKEN
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      # ============ 自动设置 Webhook（可选）============
+      - name: Setup Webhook
+        if: ${{ vars.AUTO_SETUP_WEBHOOK == 'true' }}
+        run: |
+          WORKER_URL="https://${{ secrets.WORKER_NAME || 'telegram-forward-bot' }}.${{ secrets.CF_SUBDOMAIN }}.workers.dev"
+          curl -s "${WORKER_URL}/setup"
+          echo "Webhook setup requested for ${WORKER_URL}"
