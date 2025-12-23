@@ -59,4 +59,24 @@
 
 ### 7️⃣ 设置 Webhook
 
-部署完成后访问：
+部署完成后访问：https://telegram-forward-bot.<你的子域名>.workers.dev/setup
+
+
+## 📱 使用
+
+**用户:** 发消息 → 完成验证 → 消息转发给管理员
+
+**管理员:** 回复转发的消息 → 自动发送给用户
+
+## ⚙️ 验证码类型
+
+在 Secrets 中设置 `CAPTCHA_TYPE`：
+
+- `button` - 点击表情（默认）
+- `math` - 数学计算
+- `text` - 输入验证码
+- `slider` - 点击目标
+
+## 📄 License
+
+MIT
