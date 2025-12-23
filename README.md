@@ -50,7 +50,7 @@
 
 | Name | 说明 | 默认值 |
 |------|------|--------|
-| `CAPTCHA_TYPE` | 验证码类型 | `button` |
+| `CAPTCHA_TYPE` | 验证码类型 (button/math/text/slider) | `button` |
 
 ### 6️⃣ 触发部署
 
