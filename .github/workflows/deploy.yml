@@ -22,7 +22,7 @@ jobs:
       - name: Install Wrangler
         run: npm install wrangler -g
 
-      # ============ 动态替换 wrangler.toml 中的配置 ============
+      # ============ 1. 动态替换配置 (已移除 cat 回显) ============
       - name: Update wrangler.toml
         run: |
           sed -i 's/ADMIN_ID_PLACEHOLDER/${{ secrets.ADMIN_ID }}/g' wrangler.toml
@@ -34,31 +34,57 @@ jobs:
             sed -i 's/CAPTCHA_TYPE = "button"/CAPTCHA_TYPE = "${{ secrets.CAPTCHA_TYPE }}"/g' wrangler.toml
           fi
           
-          # 显示替换后的配置（隐藏敏感信息）
-          echo "=== wrangler.toml (sanitized) ==="
-          cat wrangler.toml | sed 's/id = ".*"/id = "***"/g'
+          echo "✅ Configuration updated."
         env:
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
           KV_ID: ${{ secrets.KV_ID }}
 
-      # ============ 部署 Worker ============
-      - name: Deploy to Cloudflare Workers
-        run: wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-
-      # ============ 设置 Secrets ============
-      - name: Set Bot Token Secret
-        run: echo "${{ secrets.BOT_TOKEN }}" | wrangler secret put BOT_TOKEN
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-
-      # ============ 自动设置 Webhook（可选）============
-      - name: Setup Webhook
-        if: ${{ vars.AUTO_SETUP_WEBHOOK == 'true' }}
+      # ============ 2. 部署 Worker (核心修改：隐藏日志中的 URL) ============
+      - name: Deploy to Cloudflare Workers (Silent)
         run: |
-          WORKER_URL="https://${{ secrets.WORKER_NAME || 'telegram-forward-bot' }}.${{ secrets.CF_SUBDOMAIN }}.workers.dev"
-          curl -s "${WORKER_URL}/setup"
-          echo "Webhook setup requested for ${WORKER_URL}"
+          # 将输出重定向到文件，成功时不打印，失败时才打印
+          # 这样 Log 里就不会出现 "Published to https://..."
+          if wrangler deploy > deploy.log 2>&1; then
+            echo "✅ Deployment Successful!"
+            echo "🔒 Logs hidden to protect privacy."
+          else
+            echo "❌ Deployment Failed. Showing logs:"
+            cat deploy.log
+            exit 1
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      # ============ 3. 设置 Secrets (静默) ============
+      - name: Set Bot Token Secret
+        # 添加 > /dev/null 确保没有任何输出
+        run: echo "${{ secrets.BOT_TOKEN }}" | wrangler secret put BOT_TOKEN > /dev/null 2>&1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      # ============ 4. 自动设置 Webhook (静默 & 隐藏 URL) ============
+      - name: Setup Webhook (Silent)
+        # 这里改用了 WORKER_URL secret，因为这是最安全的隐藏方式
+        if: ${{ secrets.WORKER_URL != '' }}
+        run: |
+          echo "⏳ Waiting for DNS propagation (10s)..."
+          sleep 10
+          
+          echo "🚀 Sending setup request..."
+          
+          # curl 参数说明：
+          # -s: 静默模式
+          # -o /dev/null: 丢弃响应体 (隐藏 JSON 内容)
+          # -w "%{http_code}": 只打印 HTTP 状态码
+          
+          status_code=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.WORKER_URL }}/setup")
+          
+          if [ "$status_code" -eq 200 ]; then
+            echo "✅ Webhook Setup: OK (200)"
+          else
+            echo "❌ Webhook Setup Failed. HTTP Code: $status_code"
+            # 失败也不打印 URL，只提示错误码
+            exit 1
+          fi
