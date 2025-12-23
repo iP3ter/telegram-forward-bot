@@ -1,0 +1,65 @@
+name = "telegram-forward-bot"
+main = "src/index.js"
+compatibility_date = "2025-12-23"
+compatibility_flags = ["nodejs_compat"]
+
+# ============================================================
+#                    基础配置
+#         这些值会被 GitHub Actions 自动替换
+# ============================================================
+
+[vars]
+# 管理员 ID - 会被 GitHub Secrets 替换
+ADMIN_ID = "ADMIN_ID_PLACEHOLDER"
+
+# Bot 用户名
+BOT_USERNAME = "BOT_USERNAME_PLACEHOLDER"
+
+# ============================================================
+#                    验证码配置
+# ============================================================
+
+# 是否启用验证码
+CAPTCHA_ENABLED = "true"
+
+# 验证码类型: button / math / text / slider
+CAPTCHA_TYPE = "button"
+
+# 验证码超时时间（秒）
+CAPTCHA_TIMEOUT = "300"
+
+# 最大尝试次数
+MAX_CAPTCHA_ATTEMPTS = "3"
+
+# ============================================================
+#                    消息模板
+# ============================================================
+
+WELCOME_MESSAGE = "👋 欢迎使用本机器人！为防止滥用，请先完成验证。"
+VERIFY_SUCCESS_MESSAGE = "✅ 验证成功！现在您可以发送消息了。"
+MESSAGE_SENT_CONFIRM = "✅ 消息已发送，请等待回复。"
+BANNED_MESSAGE = "⚠️ 您已被封禁，无法发送消息。"
+
+# ============================================================
+#                    功能开关
+# ============================================================
+
+SHOW_USER_INFO = "true"
+SEND_CONFIRM = "true"
+ALLOW_MEDIA = "true"
+MESSAGE_MAPPING_DAYS = "30"
+
+# ============================================================
+#                    速率限制
+# ============================================================
+
+RATE_LIMIT_ENABLED = "true"
+RATE_LIMIT_PER_MINUTE = "10"
+
+# ============================================================
+#                    KV 存储
+# ============================================================
+
+[[kv_namespaces]]
+binding = "BOT_KV"
+id = "KV_ID_PLACEHOLDER"
