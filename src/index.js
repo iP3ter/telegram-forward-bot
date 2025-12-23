@@ -245,7 +245,20 @@ class Bot {
     if (text.startsWith('/')) {
       const [cmd, arg] = text.split(' ');
       if (['/start', '/help', '/menu'].includes(cmd)) {
-        return send(this.cfg, cid, `🤖 <b>管理面板</b>\n\n<b>1. 回复转发消息:</b>\n/block - 🚫 封禁\n/unblock - ✅ 解封\n/check - 🔍 查询\n文字 - ✉️ 回复\n\n<b>2. 指定ID:</b>\n/block [ID]\n/config - 配置`);
+        return send(this.cfg, cid, `
+🤖 <b>管理员控制台</b>
+
+<b>回复转发的消息使用：</b>
+<code>/block</code> - 封禁该用户
+<code>/unblock</code> - 解封该用户
+<code>/check</code> - 查看用户状态和信息
+
+<b>直接使用：</b>
+<code>/block [ID]</code> - 封禁指定 ID
+<code>/unblock [ID]</code> - 解封指定 ID
+<code>/check [ID]</code> - 查询指定 ID
+<code>/config</code> - 查看当前配置
+        `.trim());
       }
       if (cmd === '/block' || cmd === '/ban') {
         const tid = await this.getTargetId(msg, arg);
