@@ -2,18 +2,18 @@
 
 基于 Cloudflare Workers 的消息转发机器人，支持验证码。
 
-## 🚀 部署步骤
+## 部署步骤
 
-### 1️⃣ Fork 本仓库
+### Fork 本仓库
 
-### 2️⃣ 创建 Cloudflare KV
+### 创建 Cloudflare KV
 
 1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)
 2. `Workers & Pages` → `KV` → `Create a namespace`
 3. 名称随意，如 `tg-bot-data`
 4. **复制 Namespace ID**
 
-### 3️⃣ 获取 Cloudflare 凭据
+### 获取 Cloudflare 凭据
 
 **API Token:**
 1. `My Profile` → `API Tokens` → `Create Token`
@@ -23,7 +23,7 @@
 **Account ID:**
 - Dashboard 首页右侧栏可见
 
-### 4️⃣ 获取 Telegram 信息
+### 获取 Telegram 信息
 
 | 信息 | 获取方式 |
 |------|---------|
@@ -31,7 +31,7 @@
 | 你的用户 ID | 向 @userinfobot 发消息 |
 | Bot 用户名 | 创建时设置的用户名（不带@）|
 
-### 5️⃣ 配置 GitHub Secrets
+### 配置 GitHub Secrets
 
 进入仓库 `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
 
@@ -53,17 +53,17 @@
 |------|------|--------|
 | `CAPTCHA_TYPE` | 验证码类型 (button/math/text/slider) | `button` |
 
-### 6️⃣ 触发部署
+### 触发部署
 
 - 推送任何更改到 main 分支
 - 或到 `Actions` 页面手动运行 workflow
 
-### 7️⃣ 设置 Webhook
+### 设置 Webhook
 
 部署完成后访问：https://telegram-forward-bot.你的子域名.workers.dev/setup
 
 
-## 📱 使用
+## 使用
 
 **用户:** 发消息 → 完成验证 → 消息转发给管理员
 
@@ -71,7 +71,7 @@
 - 输入 `/help` 会弹出命令提示
 - 回复转发的消息 → 自动发送给用户
 
-## ⚙️ 验证码类型
+## 验证码类型
 
 在 Secrets 中设置 `CAPTCHA_TYPE`：
 
@@ -80,6 +80,6 @@
 - `text` - 输入验证码
 - `slider` - 点击目标
 
-## 📄 License
+## License
 
 MIT
