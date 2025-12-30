@@ -213,6 +213,15 @@ class Bot {
         return send(this.cfg, cid, '请先完成验证');
       case this.cfg.STATUS.VERIFIED:
         if (this.cfg.rateLimit.enabled && !await this.store.checkRate(cid, this.cfg.rateLimit.perMinute)) return send(this.cfg, cid, this.cfg.messages.rateLimited);
+        if (msg.text && msg.text.startsWith('/')) {
+            // 如果用户发 /start，提示他已经可以发消息了
+            if (msg.text === '/start') {
+                return send(this.cfg, cid, '✅ 您已验证成功，直接发送消息即可，无需再次开始。');
+            }
+            // 如果是其他指令（比如 /help），返回一个提示
+            return send(this.cfg, cid, '⚠️ 本机器人仅用于消息转发，不支持指令。'); 
+            return; // 直接退出，不执行下面的 forwardToAdmin
+        }
         await this.forwardToAdmin(msg, user);
         break;
       default: if (this.cfg.captcha.enabled) return this.sendCaptcha(cid, user);
