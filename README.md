@@ -45,7 +45,7 @@
 | `ADMIN_ID` | 管理员 Telegram ID | `123456789` |
 | `KV_ID` | KV Namespace ID | `xxxxxx` |
 | `BOT_USERNAME` |  Bot 用户名 | `my_forward_bot` |
-| `WORKER_URL` |  域名 | `https://telegram-forward-bot.你的子域名.workers.dev` |
+| `WORKER_URL` |  域名（保护隐私，从actions里面隐藏） | `https://telegram-forward-bot.你的子域名.workers.dev` |
 
 **可选（自定义配置）：**
 
@@ -61,6 +61,23 @@
 ### 设置 Webhook
 
 部署完成后访问：https://telegram-forward-bot.你的子域名.workers.dev/setup
+
+## 使用
+
+**用户:** 发消息 → 完成验证 → 消息转发给管理员
+
+**管理员:** 
+- 输入 `/help` 会弹出命令提示
+- 回复转发的消息 → 自动发送给用户
+
+## 验证码类型
+
+在 Secrets 中设置 `CAPTCHA_TYPE`：
+
+- `button` - 点击表情（默认）
+- `math` - 数学计算
+- `text` - 输入验证码
+- `slider` - 点击目标
 
 ## 功能
 ### 核心功能
@@ -84,23 +101,6 @@
   - `/unblock [ID]` 或回复消息 `/unblock`：解封用户。
   - `/check [ID]` 或回复消息 `/check`：查看用户状态、注册时间、用户名。
 - **状态反馈**：所有操作均有明确的成功/失败回显。
-
-## 使用
-
-**用户:** 发消息 → 完成验证 → 消息转发给管理员
-
-**管理员:** 
-- 输入 `/help` 会弹出命令提示
-- 回复转发的消息 → 自动发送给用户
-
-## 验证码类型
-
-在 Secrets 中设置 `CAPTCHA_TYPE`：
-
-- `button` - 点击表情（默认）
-- `math` - 数学计算
-- `text` - 输入验证码
-- `slider` - 点击目标
 
 ## 更新
 - 2025年12月30日 加入防止转发管理员指令等功能例如`/start`， 以及对验证时间的优化
