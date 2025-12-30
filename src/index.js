@@ -149,10 +149,14 @@ class Bot {
   
   async verify(cid, ans, user) {
     const cap = user.cap;
-    if (Date.now() - cap.at > this.cfg.captcha.timeout * 1000) {
-      user.cap = null; await this.store.saveUser(cid, user);
-      await send(this.cfg, cid, this.cfg.messages.captchaExpired);
-      return { ok: false, expired: true };
+     if (Date.now() - cap.at > this.cfg.captcha.timeout * 1000) {
+      user.status = this.cfg.STATUS.BANNED; 
+      user.bannedAt = Date.now();
+      user.cap = null;
+      await this.store.saveUser(cid, user);
+      const banMsg = '⏰ <b>验证超时</b>\n\n您未在规定时间内完成验证，系统已自动封禁您的账号。';
+      await send(this.cfg, cid, banMsg);
+      return { ok: false, banned: true };
     }
     if (ans.toString().toUpperCase() === cap.ans.toString().toUpperCase()) {
       user.status = this.cfg.STATUS.VERIFIED; user.cap = null; user.verifiedAt = Date.now();
