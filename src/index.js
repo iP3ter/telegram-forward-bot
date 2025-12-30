@@ -139,8 +139,12 @@ class Bot {
     user.status = this.cfg.STATUS.PENDING;
     user.cap = { ans: cap.answer, type: cap.type, at: Date.now(), try: 0 };
     await this.store.saveUser(cid, user);
-    const t = Math.floor(this.cfg.captcha.timeout / 60);
-    await send(this.cfg, cid, `🔐 <b>验证</b>\n\n${this.cfg.messages.welcome}\n\n${cap.question}\n\n⏰ ${t}分钟 | ❌ ${this.cfg.captcha.maxAttempts}次`, { reply_markup: cap.keyboard });
+    
+    // 直接获取秒数，不再除以 60
+    const seconds = this.cfg.captcha.timeout;
+    
+    // 从 "分钟" 改为 "秒"
+    await send(this.cfg, cid, `🔐 <b>验证</b>\n\n${this.cfg.messages.welcome}\n\n${cap.question}\n\n⏰ ${seconds}秒 | ❌ ${this.cfg.captcha.maxAttempts}次`, { reply_markup: cap.keyboard });
   }
   
   async verify(cid, ans, user) {
