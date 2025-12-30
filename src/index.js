@@ -202,49 +202,89 @@ class Bot {
   
   async onUserMsg(msg) {
     const cid = msg.chat.id;
+    
+    // 拦截管理员发的消息 (防止转发自己)
+    if (this.isAdmin(cid)) {
+       return send(this.cfg, cid, '👮‍♂️ <b>管理员提示</b>\n您是管理员，您的消息不会被转发。\n如需回复用户，请先<b>回复</b>那条转发过来的消息。');
+    }
+
     let user = await this.store.getUser(cid);
+    
+    // 初始化新用户
     if (!user) {
       user = { cid, odId: msg.from.id, un: msg.from.username, fn: msg.from.first_name, ln: msg.from.last_name, at: Date.now() };
       if (this.cfg.captcha.enabled) return this.sendCaptcha(cid, user);
       user.status = this.cfg.STATUS.VERIFIED;
     }
-    user.un = msg.from.username; user.fn = msg.from.first_name; user.lastAt = Date.now();
+
+    // 更新基本信息 (暂不保存到 KV，最后再决定)
+    user.un = msg.from.username; 
+    user.fn = msg.from.first_name;
     
+    // 定义 12 小时 (毫秒)
+    const NOTIFY_INTERVAL = 12 * 60 * 60 * 1000; 
+    const now = Date.now();
+
     switch (user.status) {
       case this.cfg.STATUS.BANNED: return send(this.cfg, cid, this.cfg.messages.banned);
+      
       case this.cfg.STATUS.PENDING:
+        // 超时封禁
+        const isTimeout = now - (user.cap?.at || 0) > this.cfg.captcha.timeout * 1000;
+        if (isTimeout) {
+            user.status = this.cfg.STATUS.BANNED; user.bannedAt = now; user.cap = null;
+            await this.store.saveUser(cid, user);
+            return send(this.cfg, cid, '⏰ <b>验证超时</b>\n\n已被系统自动封禁。');
+        }
         if (msg.text && !['button', 'slider'].includes(user.cap?.type)) return this.verify(cid, msg.text, user);
         return send(this.cfg, cid, '请先完成验证');
+
       case this.cfg.STATUS.VERIFIED:
-        if (this.cfg.rateLimit.enabled && !await this.store.checkRate(cid, this.cfg.rateLimit.perMinute)) return send(this.cfg, cid, this.cfg.messages.rateLimited);
+        // 速率限制检查
+        if (this.cfg.rateLimit.enabled && !await this.store.checkRate(cid, this.cfg.rateLimit.perMinute)) 
+            return send(this.cfg, cid, this.cfg.messages.rateLimited);
+        
+        // 指令拦截
         if (msg.text && msg.text.startsWith('/')) {
-            // 如果用户发 /start，提示他已经可以发消息了
-            if (msg.text === '/start') {
-                return send(this.cfg, cid, '✅ 您已验证成功，直接发送消息即可，无需再次开始。');
-            }
-            // 如果是其他指令（比如 /help），返回一个提示
-            return send(this.cfg, cid, '⚠️ 本机器人仅用于消息转发，不支持指令。'); 
-            return; // 直接退出，不执行下面的 forwardToAdmin
+            if (msg.text === '/start') return send(this.cfg, cid, '✅ 您已验证成功，直接发送消息即可。');
+            return;
         }
-        await this.forwardToAdmin(msg, user);
+        
+        // ==================== 核心修改：判断是否需要通知 ====================
+        // 上次通知时间不存在，或者距离现在超过 12 小时
+        const shouldNotify = !user.lastNotifyAt || (now - user.lastNotifyAt > NOTIFY_INTERVAL);
+
+        // 执行转发，传入 shouldNotify 标志
+        await this.forwardToAdmin(msg, user, shouldNotify);
+        
+        // 节省 KV 额度
+        // 只有当需要通知时（说明过了12小时），才更新数据库
+        // 或者是用户信息变了/刚验证通过，才需要存
+        if (shouldNotify) {
+            user.lastNotifyAt = now; // 更新通知时间
+            user.lastAt = now;       // 更新活跃时间
+            await this.store.saveUser(cid, user);
+        }
         break;
+
       default: if (this.cfg.captcha.enabled) return this.sendCaptcha(cid, user);
     }
-    await this.store.saveUser(cid, user);
   }
   
-  async forwardToAdmin(msg, user) {
+  async forwardToAdmin(msg, user, shouldNotify) {
     const cid = msg.chat.id;
     for (const aid of this.cfg.adminIds) {
-      if (this.cfg.features.showUserInfo) {
-        const info = `👤 <b>新消息</b>\nID: <code>${cid}</code>\n用户: ${user.un ? '@'+user.un : '无'}\n姓名: ${user.fn || ''} ${user.ln || ''}`;
+      if (this.cfg.features.showUserInfo && shouldNotify) {
+        const info = `👤 <b>新会话 / 用户信息</b>\nID: <code>${cid}</code>\n用户: ${user.un ? '@'+user.un : '无'}\n姓名: ${user.fn || ''} ${user.ln || ''}`;
         const kb = { inline_keyboard: [[{ text: '🚫 封禁', callback_data: `a_b_${cid}` }, { text: '✅ 解封', callback_data: `a_u_${cid}` }]]};
         await send(this.cfg, aid, info, { reply_markup: kb });
       }
       const res = await forward(this.cfg, aid, cid, msg.message_id);
       if (res.ok) await this.store.saveMap(res.result.message_id, cid, msg.message_id, this.cfg.mappingDays);
     }
-    if (this.cfg.features.sendConfirm) await send(this.cfg, cid, this.cfg.messages.messageSent);
+    if (this.cfg.features.sendConfirm && shouldNotify) {
+      await send(this.cfg, cid, '✅ <b>收到！</b>\n您的消息已转发给管理员，请耐心等待回复。\n(后续消息将自动转发，不再重复提示)');
+    }
   }
 
   async getTargetId(msg, arg) {
