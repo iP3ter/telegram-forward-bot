@@ -26,7 +26,7 @@ CAPTCHA_ENABLED = "true"
 CAPTCHA_TYPE = "button"
 
 # 验证码超时时间（秒）
-CAPTCHA_TIMEOUT = "30"
+CAPTCHA_TIMEOUT = "45"
 
 # 最大尝试次数
 MAX_CAPTCHA_ATTEMPTS = "3"
